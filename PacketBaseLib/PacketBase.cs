@@ -187,6 +187,9 @@ namespace PacketBaseLib
     {
         IntPtr RawPtr;
         ListDict<string, ObjectMetaInfo> fields = new ListDict<string, ObjectMetaInfo>();
+
+        #region 公开方法
+
         public PacketBase(int length)
         {
             RawPtr = Marshal.AllocHGlobal(length);
@@ -213,17 +216,75 @@ namespace PacketBaseLib
 
             if (value != null)
             {
-                SetField(name, value);
+                SetField(meta, value);
             }
 
         }
 
+        public object Get(string name)
+        {
+            ObjectMetaInfo meta = fields[name];
+            return GetField(meta);
+        }
+
+        public void Set(string name, object obj)
+        {
+            ObjectMetaInfo meta = fields[name];
+            SetField(meta, obj);
+        }
+        #endregion
+
+        object GetField(ObjectMetaInfo meta)
+        {
+            IntPtr objPtr = Marshal.AllocHGlobal(meta.Length);
+            CopyMemory(this.RawPtr, meta.Offset, objPtr, 0, meta.Length);
+            object obj = Marshal.PtrToStructure(objPtr, meta.Type);
+            Marshal.FreeHGlobal(objPtr);
+            return obj;
+        }
+
+        void SetField(ObjectMetaInfo meta, object obj)
+        {
+            int size = Marshal.SizeOf(obj);
+            if (size > meta.Length)
+                Console.WriteLine("object length bigger than byte array");  //todo 更好的log
+            IntPtr objPtr = Marshal.AllocHGlobal(size);
+            Marshal.StructureToPtr(obj, objPtr, false);
+            CopyMemory(objPtr, 0, this.RawPtr, meta.Offset, size);
+            Marshal.FreeHGlobal(objPtr);
+        }
+
+        /// <summary>
+        /// 区分字节序复制内存
+        /// </summary>
+        /// <param name="srcPtr">源指针</param>
+        /// <param name="srcOft">源偏移</param>
+        /// <param name="dstPtr">目标指针</param>
+        /// <param name="dstOft">目标偏移</param>
+        /// <param name="Length">复制长度</param>
+        static void CopyMemory(IntPtr srcPtr, int srcOfs, IntPtr dstPtr, int dstOfs, int Length)
+        {
+            for (int i = 0; i < Length; i++)
+            {
+                if (BitConverter.IsLittleEndian)
+                {
+                    Marshal.WriteByte(dstPtr, dstOfs + i, Marshal.ReadByte(srcPtr, srcOfs + Length - 1 - i)); //顺写逆读
+                }
+                else
+                {
+                    Marshal.WriteByte(dstPtr, dstOfs + i, Marshal.ReadByte(srcPtr, srcOfs + i)); //顺写顺读
+                }
+            }
+        }
+
+        #region override
 
         public override bool TrySetMember(SetMemberBinder binder, object value)
         {
-            if (fields.ContainsKey(binder.Name))
+            ObjectMetaInfo meta;
+            if (fields.TryGetValue(binder.Name, out meta))
             {
-                SetField(binder.Name, value);
+                SetField(meta, value);
                 return true;
             }
             return false;
@@ -234,60 +295,19 @@ namespace PacketBaseLib
             ObjectMetaInfo meta;
             if (fields.TryGetValue(binder.Name, out meta))
             {
-                result = GetField(binder.Name);
+                result = GetField(meta);
                 return true;
             }
             result = null;
             return false;
         }
 
-        //todo getfield setfield 优化多次在fields中查询meta
-        object GetField(string name)
-        {
-            ObjectMetaInfo meta = fields[name];
-            IntPtr objPtr = Marshal.AllocHGlobal(meta.Length); //todo 释放
-            //字节序
-            for (int i = 0; i < meta.Length; i++)
-            {
-                if (BitConverter.IsLittleEndian)   //todo 抽出过程
-                {
-                    Marshal.WriteByte(objPtr, i, Marshal.ReadByte(this.RawPtr, meta.Offset + meta.Length -1 - i));
-                }
-                else
-                {
-                    Marshal.WriteByte(objPtr, i, Marshal.ReadByte(this.RawPtr, meta.Offset + i));
-                }
-            }
-            return Marshal.PtrToStructure(objPtr, meta.Type);
-        }
-
-        void SetField(string name, object obj)
-        {
-            ObjectMetaInfo meta = fields[name];
-            int size = Marshal.SizeOf(obj);
-            if (size > meta.Length)
-                Console.WriteLine("object length bigger than byte array");  //todo 更好的log
-            IntPtr objPtr = Marshal.AllocHGlobal(size);
-            Marshal.StructureToPtr(obj, objPtr, false); //todo 释放
-                                                        //字节序
-            for (int i = 0; i < meta.Length; i++)
-            {
-                if (BitConverter.IsLittleEndian)   //todo 抽出过程
-                {
-                    Marshal.WriteByte(this.RawPtr, meta.Offset + i, Marshal.ReadByte(objPtr, meta.Length - 1 - i));
-                }
-                else
-                {
-                    Marshal.WriteByte(this.RawPtr, meta.Offset + i, Marshal.ReadByte(objPtr, i));
-                }
-            }
-        }
-
-
         public override IEnumerable<string> GetDynamicMemberNames()
         {
             return this;
         }
+
+        #endregion
 
         #region IDisposable Support
         private bool disposedValue = false; // 要检测冗余调用
