@@ -375,7 +375,7 @@ namespace PacketBaseLib
         {
             get
             {
-                byte[] data = null;
+                byte[] data = new byte[this.Length];
                 Marshal.Copy(this.RawPtr, data, 0, this.Length);
                 return data;
             }
@@ -415,6 +415,21 @@ namespace PacketBaseLib
         public override IEnumerable<string> GetDynamicMemberNames()
         {
             return this;
+        }
+
+        public override string ToString()
+        {
+            string[] str = this.GetDynamicMemberNames().ToArray();
+            string outstr = "";
+            for (int i = 0; i < str.Length; i++)
+            {
+                outstr += String.Format("{0}: {1}", str[i], this.Get(str[i]));
+                if (i < str.Length - 1)
+                {
+                    outstr += "\n";
+                }
+            }
+            return outstr;
         }
 
         #endregion
