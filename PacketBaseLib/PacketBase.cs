@@ -193,8 +193,8 @@ namespace PacketBaseLib
             //处理特殊类型
             if (meta.Type == typeof(byte[]))
             {
-                byte[] data;
-                CopyMemory(this.RawPtr, meta.Offset, out data, meta.Length);
+                byte[] data = new byte[meta.Length];
+                Marshal.Copy(RawPtr + meta.Offset, data, 0, meta.Length);
                 return data;
             }
             else if (meta.Type.IsEnum)
@@ -217,7 +217,7 @@ namespace PacketBaseLib
             //处理特殊类型
             if (meta.Type == typeof(byte[]))
             {
-                CopyMemory((byte[])obj, this.RawPtr, meta.Offset, size);
+                Marshal.Copy((byte[])obj, 0, this.RawPtr+meta.Offset, size);
                 return;
             }
             else if (meta.Type.IsEnum)
@@ -252,36 +252,6 @@ namespace PacketBaseLib
                 }
             }
         }
-        static void CopyMemory(byte[] srcByte, IntPtr dstPtr, int dstOfs, int Length)
-        {
-            for (int i = 0; i < Length; i++)
-            {
-                if (BitConverter.IsLittleEndian)
-                {
-                    Marshal.WriteByte(dstPtr, dstOfs + i, srcByte[srcByte.Length - 1 - i]); //顺写逆读
-                }
-                else
-                {
-                    Marshal.WriteByte(dstPtr, dstOfs + i, srcByte[i]); //顺写顺读
-                }
-            }
-        }
-        static void CopyMemory(IntPtr srcPtr, int srcOfs, out byte[] dstByte, int Length)
-        {
-            dstByte = new byte[Length];
-            for (int i = 0; i < Length; i++)
-            {
-                if (BitConverter.IsLittleEndian)
-                {
-                    dstByte[i] = Marshal.ReadByte(srcPtr, srcOfs + Length - 1 - i); //顺写逆读
-                }
-                else
-                {
-                    dstByte[i] = Marshal.ReadByte(srcPtr, srcOfs + i); //顺写顺读
-                }
-            }
-        }
-
 
         /// <summary>
         /// 改变对象在byte[]中的长度，会清空该对象数据
