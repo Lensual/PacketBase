@@ -231,18 +231,51 @@ namespace PacketBaseLib
             }
         }
 
+        /// <summary>
+        /// 改变对象在byte[]中的长度，会清空该对象数据
+        /// </summary>
+        void changeLength(string name, int newLength)
+        {
+            ObjectMetaInfo meta = fields[name];
+            int oldLength = meta.Length;
+
+            IntPtr newRawPtr = Marshal.AllocHGlobal(newLength);
+
+            //copy bytes
+            for (int i = 0; i < meta.Offset + oldLength; i++) //前+自己本身
+            {
+                Marshal.WriteByte(newRawPtr, i, Marshal.ReadByte(this.RawPtr, i));
+            }
+            for (int i = meta.Offset + oldLength; i < Length; i++) //后
+            {
+                Marshal.WriteByte(newRawPtr, i + newLength - oldLength, Marshal.ReadByte(this.RawPtr, i));
+            }
+
+            //调整长度
+            meta.Length = newLength;
+            fields[name] = meta;
+
+            //调整后面成员偏移
+            for (int i = 0; i < fields.Count; i++)
+            {
+                if (fields[i].Offset > meta.Offset)
+                {
+                    ObjectMetaInfo oldMeta = fields[i];
+                    oldMeta.Offset += newLength - oldLength;
+                    fields[i] = oldMeta;
+                }
+            }
+        }
+
         #region 公开方法
 
         public PacketBase(int length)
         {
             RawPtr = Marshal.AllocHGlobal(length);
+            Length = length;
         }
 
-        public int Length
-        {
-            get;
-            set;
-        }
+        public int Length { get; }
 
         public void AddField<T>(string name, T value, int? offset = null, int? length = null)
         {
