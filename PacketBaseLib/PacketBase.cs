@@ -188,52 +188,6 @@ namespace PacketBaseLib
         IntPtr RawPtr;
         ListDict<string, ObjectMetaInfo> fields = new ListDict<string, ObjectMetaInfo>();
 
-        #region 公开方法
-
-        public PacketBase(int length)
-        {
-            RawPtr = Marshal.AllocHGlobal(length);
-        }
-
-        public void AddField<T>(string name, T value, int? offset = null, int? length = null)
-        {
-            if (length == null)
-                length = Marshal.SizeOf(typeof(T));
-            if (offset == null)
-            {
-                if (fields.Count > 0)
-                    offset = fields.Last.Offset + fields.Last.Length;
-                else
-                    offset = 0;
-            }
-            ObjectMetaInfo meta = new ObjectMetaInfo()
-            {
-                Length = (int)length,
-                Offset = (int)offset,
-                Type = typeof(T)
-            };
-            fields.Add(name, meta);
-
-            if (value != null)
-            {
-                SetField(meta, value);
-            }
-
-        }
-
-        public object Get(string name)
-        {
-            ObjectMetaInfo meta = fields[name];
-            return GetField(meta);
-        }
-
-        public void Set(string name, object obj)
-        {
-            ObjectMetaInfo meta = fields[name];
-            SetField(meta, obj);
-        }
-        #endregion
-
         object GetField(ObjectMetaInfo meta)
         {
             IntPtr objPtr = Marshal.AllocHGlobal(meta.Length);
@@ -276,6 +230,76 @@ namespace PacketBaseLib
                 }
             }
         }
+
+        #region 公开方法
+
+        public PacketBase(int length)
+        {
+            RawPtr = Marshal.AllocHGlobal(length);
+        }
+
+        public int Length
+        {
+            get;
+            set;
+        }
+
+        public void AddField<T>(string name, T value, int? offset = null, int? length = null)
+        {
+            if (length == null)
+                length = Marshal.SizeOf(typeof(T));
+            if (offset == null)
+            {
+                if (fields.Count > 0)
+                    offset = fields.Last.Offset + fields.Last.Length;
+                else
+                    offset = 0;
+            }
+            ObjectMetaInfo meta = new ObjectMetaInfo()
+            {
+                Length = (int)length,
+                Offset = (int)offset,
+                Type = typeof(T)
+            };
+            fields.Add(name, meta);
+
+            if (value != null)
+            {
+                SetField(meta, value);
+            }
+
+        }
+
+        public object Get(string name)
+        {
+            ObjectMetaInfo meta = fields[name];
+            return GetField(meta);
+        }
+
+        public void Set(string name, object obj)
+        {
+            ObjectMetaInfo meta = fields[name];
+            SetField(meta, obj);
+        }
+
+        /// <summary>
+        /// 返回或设置网络字节序的byte数组
+        /// </summary>
+        public byte[] Raw
+        {
+            get
+            {
+                byte[] data = null;
+                Marshal.Copy(this.RawPtr, data, 0, this.Length);
+                return data;
+            }
+            set
+            {
+                Marshal.Copy(value, 0, this.RawPtr, this.Length);
+            }
+        }
+
+        #endregion
 
         #region override
 
