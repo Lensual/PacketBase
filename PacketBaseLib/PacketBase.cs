@@ -192,17 +192,28 @@ namespace PacketBaseLib
         {
             IntPtr objPtr = Marshal.AllocHGlobal(meta.Length);
             CopyMemory(this.RawPtr, meta.Offset, objPtr, 0, meta.Length);
-            object obj = Marshal.PtrToStructure(objPtr, meta.Type);
+            object obj;
+            //处理特殊类型
+            if (meta.Type.IsEnum)
+            {
+                meta.Type = Enum.GetUnderlyingType(meta.Type);
+            }
+            obj = Marshal.PtrToStructure(objPtr, meta.Type);
             Marshal.FreeHGlobal(objPtr);
             return obj;
         }
 
         void SetField(ObjectMetaInfo meta, object obj)
         {
-            int size = Marshal.SizeOf(obj);
+            int size = GetStructSize(obj, meta.Type);
             if (size > meta.Length)
                 Console.WriteLine("object length bigger than byte array");  //todo 更好的log
             IntPtr objPtr = Marshal.AllocHGlobal(size);
+            //处理特殊类型
+            if (meta.Type.IsEnum)
+            {
+                obj = Convert.ChangeType(obj, Enum.GetUnderlyingType(meta.Type));
+            }
             Marshal.StructureToPtr(obj, objPtr, false);
             CopyMemory(objPtr, 0, this.RawPtr, meta.Offset, size);
             Marshal.FreeHGlobal(objPtr);
@@ -254,6 +265,7 @@ namespace PacketBaseLib
             //调整长度
             meta.Length = newLength;
             fields[name] = meta;
+            this._length += newLength - oldLength;
 
             //调整后面成员偏移
             for (int i = 0; i < fields.Count; i++)
@@ -267,20 +279,51 @@ namespace PacketBaseLib
             }
         }
 
+        /// <summary>
+        /// 返回特殊类型的字节长度
+        /// </summary>
+        int GetStructSize(object obj, Type type = null)
+        {
+            if (type == null) type = obj.GetType();
+            //处理特殊类型
+            if (type.IsEnum)
+            {
+                return Marshal.SizeOf(Enum.GetUnderlyingType(type));
+            }
+            else
+            {
+                return Marshal.SizeOf(type);
+            }
+        }
+
         #region 公开方法
 
         public PacketBase(int length)
         {
             RawPtr = Marshal.AllocHGlobal(length);
-            Length = length;
+            this._length = length;
         }
 
-        public int Length { get; }
+        /// <summary>
+        /// 包长度
+        /// </summary>
+        public int Length { get => this._length; }
+        int _length;
 
+        /// <summary>
+        /// 向数据包结构添加字段
+        /// </summary>
+        /// <typeparam name="T">字段类型</typeparam>
+        /// <param name="name">字段名</param>
+        /// <param name="value">给一个初始化值，可以null</param>
+        /// <param name="offset">在包结构中的偏移，默认为null在最后字段追加</param>
+        /// <param name="length">字段长度，默认为null自动将类型长度作为字段长度</param>
         public void AddField<T>(string name, T value, int? offset = null, int? length = null)
         {
             if (length == null)
-                length = Marshal.SizeOf(typeof(T));
+            {
+                length = GetStructSize(value, typeof(T));
+            }
             if (offset == null)
             {
                 if (fields.Count > 0)
@@ -303,12 +346,22 @@ namespace PacketBaseLib
 
         }
 
+        /// <summary>
+        /// 获取字段存储的对象
+        /// </summary>
+        /// <param name="name">字段名</param>
+        /// <returns></returns>
         public object Get(string name)
         {
             ObjectMetaInfo meta = fields[name];
             return GetField(meta);
         }
 
+        /// <summary>
+        /// 设置字段存储的对象
+        /// </summary>
+        /// <param name="name">字段名</param>
+        /// <param name="obj">对象</param>
         public void Set(string name, object obj)
         {
             ObjectMetaInfo meta = fields[name];
