@@ -19,12 +19,12 @@ namespace Demo
     }
     class LoginPacket : PacketBase
     {
-        public LoginPacket():base(9)
+        public LoginPacket():base(12)
         {
             base.AddField<UInt32>("PkgLen",(uint)base.Length);
             base.AddField<Byte>("Version", 0);
             base.AddField<Command>("Command", Command.Login);
-            //base.AddField<Byte[]>("Data", new byte[3]{ 0x00,0x01,0x02});
+            base.AddField<Byte[]>("Data", new byte[3]{ 0x00,0x01,0x02});
 
         }
     }

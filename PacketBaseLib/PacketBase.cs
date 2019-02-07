@@ -190,14 +190,20 @@ namespace PacketBaseLib
 
         object GetField(ObjectMetaInfo meta)
         {
-            IntPtr objPtr = Marshal.AllocHGlobal(meta.Length);
-            CopyMemory(this.RawPtr, meta.Offset, objPtr, 0, meta.Length);
-            object obj;
             //处理特殊类型
-            if (meta.Type.IsEnum)
+            if (meta.Type == typeof(byte[]))
+            {
+                byte[] data;
+                CopyMemory(this.RawPtr, meta.Offset, out data, meta.Length);
+                return data;
+            }
+            else if (meta.Type.IsEnum)
             {
                 meta.Type = Enum.GetUnderlyingType(meta.Type);
             }
+            IntPtr objPtr = Marshal.AllocHGlobal(meta.Length);
+            CopyMemory(this.RawPtr, meta.Offset, objPtr, 0, meta.Length);
+            object obj;
             obj = Marshal.PtrToStructure(objPtr, meta.Type);
             Marshal.FreeHGlobal(objPtr);
             return obj;
@@ -208,12 +214,17 @@ namespace PacketBaseLib
             int size = GetStructSize(obj, meta.Type);
             if (size > meta.Length)
                 Console.WriteLine("object length bigger than byte array");  //todo 更好的log
-            IntPtr objPtr = Marshal.AllocHGlobal(size);
             //处理特殊类型
-            if (meta.Type.IsEnum)
+            if (meta.Type == typeof(byte[]))
+            {
+                CopyMemory((byte[])obj, this.RawPtr, meta.Offset, size);
+                return;
+            }
+            else if (meta.Type.IsEnum)
             {
                 obj = Convert.ChangeType(obj, Enum.GetUnderlyingType(meta.Type));
             }
+            IntPtr objPtr = Marshal.AllocHGlobal(size);
             Marshal.StructureToPtr(obj, objPtr, false);
             CopyMemory(objPtr, 0, this.RawPtr, meta.Offset, size);
             Marshal.FreeHGlobal(objPtr);
@@ -241,6 +252,36 @@ namespace PacketBaseLib
                 }
             }
         }
+        static void CopyMemory(byte[] srcByte, IntPtr dstPtr, int dstOfs, int Length)
+        {
+            for (int i = 0; i < Length; i++)
+            {
+                if (BitConverter.IsLittleEndian)
+                {
+                    Marshal.WriteByte(dstPtr, dstOfs + i, srcByte[srcByte.Length - 1 - i]); //顺写逆读
+                }
+                else
+                {
+                    Marshal.WriteByte(dstPtr, dstOfs + i, srcByte[i]); //顺写顺读
+                }
+            }
+        }
+        static void CopyMemory(IntPtr srcPtr, int srcOfs, out byte[] dstByte, int Length)
+        {
+            dstByte = new byte[Length];
+            for (int i = 0; i < Length; i++)
+            {
+                if (BitConverter.IsLittleEndian)
+                {
+                    dstByte[i] = Marshal.ReadByte(srcPtr, srcOfs + Length - 1 - i); //顺写逆读
+                }
+                else
+                {
+                    dstByte[i] = Marshal.ReadByte(srcPtr, srcOfs + i); //顺写顺读
+                }
+            }
+        }
+
 
         /// <summary>
         /// 改变对象在byte[]中的长度，会清空该对象数据
@@ -289,6 +330,10 @@ namespace PacketBaseLib
             if (type.IsEnum)
             {
                 return Marshal.SizeOf(Enum.GetUnderlyingType(type));
+            }
+            else if (type == typeof(byte[]))
+            {
+                return ((byte[])obj).Length;
             }
             else
             {
@@ -419,12 +464,19 @@ namespace PacketBaseLib
 
         public override string ToString()
         {
-            string[] str = this.GetDynamicMemberNames().ToArray();
+            string[] names = this.GetDynamicMemberNames().ToArray();
             string outstr = "";
-            for (int i = 0; i < str.Length; i++)
+            for (int i = 0; i < names.Length; i++)
             {
-                outstr += String.Format("{0}: {1}", str[i], this.Get(str[i]));
-                if (i < str.Length - 1)
+                object obj = this.Get(names[i]);
+                string itemStr;
+                //byte[] to hex string
+                if (obj.GetType() == typeof(byte[]))
+                    itemStr = BitConverter.ToString((byte[])obj);
+                else
+                    itemStr = obj.ToString();
+                outstr += String.Format("{0}: {1}", names[i], itemStr);
+                if (i < names.Length - 1)
                 {
                     outstr += "\n";
                 }
