@@ -181,6 +181,7 @@ namespace PacketBaseLib
         public int Offset;
         public int Length;
         public Type Type;
+        public bool AutoResize;
     }
 
     public class PacketBase : System.Dynamic.DynamicObject, IDisposable, IEnumerable<string>
@@ -214,17 +215,11 @@ namespace PacketBaseLib
             int size = GetStructSize(obj, meta.Type);
             if (size > meta.Length)
             {
-                if (AutoResize)
+                ObjectTooLarge?.Invoke(obj, size, meta.Length);
+                if (meta.AutoResize)
                 {
-                    if (meta.Type == typeof(byte[]) ||
-                        meta.Type.IsEnum)
-                    {
-                        changeLength(meta, size);
-                    }
-                    else
-                    {
-                        //todo
-                    }
+                    //todo event
+                    ChangeLength(meta, size);
                 }
                 else
                 {
@@ -272,13 +267,13 @@ namespace PacketBaseLib
         //todo 增加字节序翻转参数
 
         /// <summary>
-        /// 改变对象在byte[]中的长度，在字段后方延长
+        /// 改变字段长度，新字节在字段后方新增
         /// </summary>
-        void changeLength(ObjectMetaInfo meta, int newLength)
+        void ChangeLength(ObjectMetaInfo meta, int newLength)
         {
             int oldLength = meta.Length;
 
-            IntPtr newRawPtr = Marshal.AllocHGlobal(this.Length+newLength-oldLength);
+            IntPtr newRawPtr = Marshal.AllocHGlobal(this.Length + newLength - oldLength);
 
             //copy bytes
             for (int i = 0; i < meta.Offset + oldLength; i++) //前+自己本身
@@ -311,8 +306,10 @@ namespace PacketBaseLib
             }
             Marshal.FreeHGlobal(this.RawPtr);
             this.RawPtr = newRawPtr;
-
+            RawResized?.Invoke(this.Length);
+            FieldResized?.Invoke(newLength);
         }
+
 
         /// <summary>
         /// 返回特殊类型的字节长度
@@ -336,7 +333,24 @@ namespace PacketBaseLib
             }
         }
 
+        #region Event
+        public delegate void ObjTooLrgEvtHandler(object obj, int objSize, int SizeLimit);
+        public event ObjTooLrgEvtHandler ObjectTooLarge;
+        public delegate void ResizedEvent(int newLength);
+        public event ResizedEvent RawResized;
+        public event ResizedEvent FieldResized;
+
+        #endregion
+
         #region 公开方法
+
+        /// <summary>
+        /// 改变字段长度，新字节在字段后方新增
+        /// </summary>
+        public void ChangeLength(string name, int newLength)
+        {
+            ChangeLength(fields[name], newLength);
+        }
 
         public PacketBase(int length)
         {
@@ -353,7 +367,6 @@ namespace PacketBaseLib
         /// <summary>
         /// 对于变长字段如enum、string，自动修改字段大小
         /// </summary>
-        public bool AutoResize { get; set; } = false;
 
         /// <summary>
         /// 向数据包结构添加字段
@@ -363,7 +376,8 @@ namespace PacketBaseLib
         /// <param name="value">给一个初始化值，可以null</param>
         /// <param name="offset">在包结构中的偏移，默认为null在最后字段追加</param>
         /// <param name="length">字段长度，默认为null自动将类型长度作为字段长度</param>
-        public void AddField<T>(string name, T value, int? offset = null, int? length = null)
+        /// <param name="AutoResize">当对象大小超出字段大小时自动修改字段大小，可用于string、enum等变长类型</param>
+        public void AddField<T>(string name, T value, int? offset = null, int? length = null, bool AutoResize = false)
         {
             if (length == null)
             {
@@ -380,7 +394,8 @@ namespace PacketBaseLib
             {
                 Length = (int)length,
                 Offset = (int)offset,
-                Type = typeof(T)
+                Type = typeof(T),
+                AutoResize = AutoResize
             };
             fields.Add(name, meta);
 
