@@ -213,11 +213,21 @@ namespace PacketBaseLib
         {
             int size = GetStructSize(obj, meta.Type);
             if (size > meta.Length)
+            {
+                if (AutoResize)
+                {
+                    if (meta.Type == typeof(byte[]) ||
+                        meta.Type.IsEnum)
+                    {
+                        changeLength(meta, size);
+                    }
+                }
                 Console.WriteLine("object length bigger than byte array");  //todo 更好的log
+            }
             //处理特殊类型
             if (meta.Type == typeof(byte[]))
             {
-                Marshal.Copy((byte[])obj, 0, this.RawPtr+meta.Offset, size);
+                Marshal.Copy((byte[])obj, 0, this.RawPtr + meta.Offset, size);
                 return;
             }
             else if (meta.Type.IsEnum)
@@ -254,11 +264,10 @@ namespace PacketBaseLib
         }
 
         /// <summary>
-        /// 改变对象在byte[]中的长度，会清空该对象数据
+        /// 改变对象在byte[]中的长度，在字段后方延长
         /// </summary>
-        void changeLength(string name, int newLength)
+        void changeLength(ObjectMetaInfo meta, int newLength)
         {
-            ObjectMetaInfo meta = fields[name];
             int oldLength = meta.Length;
 
             IntPtr newRawPtr = Marshal.AllocHGlobal(newLength);
@@ -273,14 +282,18 @@ namespace PacketBaseLib
                 Marshal.WriteByte(newRawPtr, i + newLength - oldLength, Marshal.ReadByte(this.RawPtr, i));
             }
 
-            //调整长度
-            meta.Length = newLength;
-            fields[name] = meta;
+            //调整包长度
             this._length += newLength - oldLength;
 
-            //调整后面成员偏移
             for (int i = 0; i < fields.Count; i++)
             {
+                //调整meta
+                if (fields[i].Equals(meta))
+                {
+                    meta.Length = newLength;
+                    fields[i] = meta;
+                }
+                //调整后面成员偏移
                 if (fields[i].Offset > meta.Offset)
                 {
                     ObjectMetaInfo oldMeta = fields[i];
@@ -288,6 +301,9 @@ namespace PacketBaseLib
                     fields[i] = oldMeta;
                 }
             }
+            Marshal.FreeHGlobal(this.RawPtr);
+            this.RawPtr = newRawPtr;
+
         }
 
         /// <summary>
@@ -295,6 +311,7 @@ namespace PacketBaseLib
         /// </summary>
         int GetStructSize(object obj, Type type = null)
         {
+            if (obj == null) return 0;
             if (type == null) type = obj.GetType();
             //处理特殊类型
             if (type.IsEnum)
@@ -324,6 +341,11 @@ namespace PacketBaseLib
         /// </summary>
         public int Length { get => this._length; }
         int _length;
+
+        /// <summary>
+        /// 对于变长字段如enum、string，自动修改字段大小
+        /// </summary>
+        public bool AutoResize { get; set; } = false;
 
         /// <summary>
         /// 向数据包结构添加字段

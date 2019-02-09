@@ -12,21 +12,25 @@ namespace Demo
         static void Main(string[] args)
         {
             LoginPacket loginPkt = new LoginPacket();
-            Console.WriteLine("LoginPkt:\n{0}",loginPkt);
+            loginPkt.AutoResize = true;
+            //(loginPkt as dynamic).Data = new byte[3] { 0xff, 0x11, 0x22 };
+            Console.WriteLine("LoginPkt\n{0}",loginPkt);
             Console.WriteLine(BitConverter.ToString(loginPkt.Raw));
             Console.ReadKey();
         }
     }
     class LoginPacket : PacketBase
     {
-        public LoginPacket():base(12)
+        public LoginPacket():base(9)
         {
             base.AddField<UInt32>("PkgLen",(uint)base.Length);
             base.AddField<Byte>("Version", 0);
             base.AddField<Command>("Command", Command.Login);
-            base.AddField<Byte[]>("Data", new byte[3]{ 0x00,0x01,0x02});
-
+            base.AddField<Byte[]>("Data", null);
         }
+
+
+
     }
 
     enum Command
