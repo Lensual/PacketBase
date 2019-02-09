@@ -13,7 +13,7 @@ namespace Demo
         {
             LoginPacket loginPkt = new LoginPacket();
             loginPkt.AutoResize = true;
-            //(loginPkt as dynamic).Data = new byte[3] { 0xff, 0x11, 0x22 };
+            (loginPkt as dynamic).Data = new byte[3] { 0xff, 0x11, 0x22 };
             Console.WriteLine("LoginPkt\n{0}",loginPkt);
             Console.WriteLine(BitConverter.ToString(loginPkt.Raw));
             Console.ReadKey();

@@ -221,8 +221,15 @@ namespace PacketBaseLib
                     {
                         changeLength(meta, size);
                     }
+                    else
+                    {
+                        //todo
+                    }
                 }
-                Console.WriteLine("object length bigger than byte array");  //todo 更好的log
+                else
+                {
+                    Console.WriteLine("object length bigger than byte array");  //todo 更好的log
+                }
             }
             //处理特殊类型
             if (meta.Type == typeof(byte[]))
@@ -262,6 +269,7 @@ namespace PacketBaseLib
                 }
             }
         }
+        //todo 增加字节序翻转参数
 
         /// <summary>
         /// 改变对象在byte[]中的长度，在字段后方延长
@@ -270,7 +278,7 @@ namespace PacketBaseLib
         {
             int oldLength = meta.Length;
 
-            IntPtr newRawPtr = Marshal.AllocHGlobal(newLength);
+            IntPtr newRawPtr = Marshal.AllocHGlobal(this.Length+newLength-oldLength);
 
             //copy bytes
             for (int i = 0; i < meta.Offset + oldLength; i++) //前+自己本身
